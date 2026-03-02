@@ -6,7 +6,7 @@ aptPkgs = ["curl", "wget"]
 
 [phases.install]
 cmds = ["npm install"]
-onlyIncludeFiles = ["package.json", "package-lock.json"]
+onlyIncludeFiles = ["package.json"]
 
 [phases.build]
 cmds = []
