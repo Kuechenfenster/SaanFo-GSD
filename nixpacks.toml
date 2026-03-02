@@ -1,9 +1,12 @@
+providers = ["nodejs"]
+
 [phases.setup]
 nixPkgs = ["nodejs"]
 aptPkgs = ["curl", "wget"]
 
 [phases.install]
 cmds = ["npm install"]
+onlyIncludeFiles = ["package.json", "package-lock.json"]
 
 [phases.build]
 cmds = []
