@@ -1,12 +1,12 @@
 [phases.setup]
-nixPkgs = ["flutter"]
-aptPkgs = ["curl", "wget", "unzip", "git"]
+nixPkgs = ["nodejs"]
+aptPkgs = ["curl", "wget"]
 
 [phases.install]
-cmds = ["flutter pub get"]
+cmds = ["npm install"]
 
 [phases.build]
-cmds = ["flutter build web"]
+cmds = []
 
 [start]
-cmd = "npx serve build/web -l 8080"
+cmd = "npm start"

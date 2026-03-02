@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaanFo Map</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Splash Screen -->
+        <div id="splash-screen" class="screen active">
+            <div class="splash-content">
+                <div class="logo">🛒</div>
+                <h1>SaanFo Map</h1>
+                <p class="tagline">Discover grocery deals near you</p>
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- Phone Auth Screen -->
+        <div id="phone-auth-screen" class="screen">
+            <div class="screen-content">
+                <h2>Welcome to SaanFo Map</h2>
+                <p class="subtitle">Enter your Hong Kong phone number to get started</p>
+                
+                <div class="form-group">
+                    <label for="phone-number">Phone Number</label>
+                    <div class="phone-input">
+                        <span class="country-code">+852</span>
+                        <input type="tel" id="phone-number" placeholder="9123 4567" maxlength="8">
+                    </div>
+                    <p class="helper-text">We'll send you a verification code</p>
+                </div>
+                
+                <button id="send-otp-btn" class="btn btn-primary" disabled>
+                    Send Verification Code
+                </button>
+            </div>
+        </div>
+
+        <!-- OTP Screen -->
+        <div id="otp-screen" class="screen">
+            <div class="screen-content">
+                <h2>Enter Verification Code</h2>
+                <p class="subtitle">Enter the 6-digit code sent to <span id="otp-phone"></span></p>
+                
+                <div class="otp-inputs">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="0">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="1">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="2">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="3">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="4">
+                    <input type="text" class="otp-digit" maxlength="1" data-index="5">
+                </div>
+                
+                <p class="helper-text">Didn't receive it? <button class="link-btn" id="resend-otp">Resend</button></p>
+                
+                <button id="verify-otp-btn" class="btn btn-primary" disabled>
+                    Verify
+                </button>
+            </div>
+        </div>
+
+        <!-- Email Screen -->
+        <div id="email-screen" class="screen">
+            <div class="screen-content">
+                <h2>Add Your Email</h2>
+                <p class="subtitle">Get deal alerts and newsletters (optional)</p>
+                
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="you@example.com">
+                </div>
+                
+                <div class="button-group">
+                    <button id="skip-email-btn" class="btn btn-secondary">Skip</button>
+                    <button id="save-email-btn" class="btn btn-primary">Continue</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Location Permission Screen -->
+        <div id="location-permission-screen" class="screen">
+            <div class="screen-content">
+                <div class="illustration">📍</div>
+                <h2>Enable Location</h2>
+                <p class="subtitle">Allow SaanFo Map to access your location to find deals near you</p>
+                
+                <div class="benefits">
+                    <div class="benefit">
+                        <span class="benefit-icon">🗺️</span>
+                        <span>See deals on the map</span>
+                    </div>
+                    <div class="benefit">
+                        <span class="benefit-icon">📏</span>
+                        <span>Filter by distance</span>
+                    </div>
+                    <div class="benefit">
+                        <span class="benefit-icon">🏪</span>
+                        <span>Find nearby stores</span>
+                    </div>
+                </div>
+                
+                <button id="allow-location-btn" class="btn btn-primary">
+                    Allow Location Access
+                </button>
+            </div>
+        </div>
+
+        <!-- Location Preset Screen -->
+        <div id="location-preset-screen" class="screen">
+            <div class="screen-content">
+                <h2>Set Your Locations</h2>
+                <p class="subtitle">Save your Home and Work locations for quick access</p>
+                
+                <div class="location-presets">
+                    <div class="preset-card" id="home-preset">
+                        <div class="preset-icon">🏠</div>
+                        <div class="preset-info">
+                            <h3>Home</h3>
+                            <p class="preset-status" id="home-status">Not set</p>
+                        </div>
+                        <button class="btn btn-small" id="set-home-btn">Set</button>
+                    </div>
+                    
+                    <div class="preset-card" id="work-preset">
+                        <div class="preset-icon">💼</div>
+                        <div class="preset-info">
+                            <h3>Work</h3>
+                            <p class="preset-status" id="work-status">Not set</p>
+                        </div>
+                        <button class="btn btn-small" id="set-work-btn">Set</button>
+                    </div>
+                </div>
+                
+                <button id="finish-setup-btn" class="btn btn-primary">
+                    Continue to App
+                </button>
+            </div>
+        </div>
+
+        <!-- Main App Screen -->
+        <div id="main-app-screen" class="screen">
+            <div class="app-header">
+                <h1>SaanFo Map</h1>
+                <button id="logout-btn" class="btn btn-small">Logout</button>
+            </div>
+            <div class="app-content">
+                <div class="placeholder-map">
+                    <div class="map-text">
+                        <h2>🗺️ Map View</h2>
+                        <p>Deals near you will appear here</p>
+                        <p class="small">Phase 5: Deal Discovery coming soon</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
