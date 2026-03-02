@@ -9,4 +9,4 @@ cmds = ["flutter pub get"]
 cmds = ["flutter build web"]
 
 [start]
-cmd = "python3 -m http.server 8080 --directory build/web"
+cmd = "npx serve build/web -l 8080"
