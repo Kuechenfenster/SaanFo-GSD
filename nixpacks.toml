@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ["flutter"]
+aptPkgs = ["curl", "wget", "unzip", "git"]
+
+[phases.install]
+cmds = ["flutter pub get"]
+
+[phases.build]
+cmds = ["flutter build web"]
+
+[start]
+cmd = "python3 -m http.server 8080 --directory build/web"
