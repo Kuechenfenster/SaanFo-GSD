@@ -1,42 +1,44 @@
-# SaanFo Map 🛒🗺️
+# SaanFo Map 🛒
 
-[![Flutter Version](https://img.shields.io/badge/Flutter-3.41+-blue.svg)](https://flutter.dev)
-[![Dart Version](https://img.shields.io/badge/Dart-3.11+-blue.svg)](https://dart.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Community-driven grocery deal finder for Hong Kong.
 
-**Community-driven grocery deal finder app for Hong Kong**
+## About
 
-SaanFo Map helps users discover grocery deals in their local area. Snap photos of deals you find, AI extracts product details, and view them on an interactive map with price history.
+SaanFo Map helps users discover grocery deals near them. Users can snap photos of deals they find in stores, and the app maps deals nearby while highlighting those matching user interests.
 
-## 🌟 Core Features
+**Target Users:**
+- Families (especially with helpers managing groceries)
+- Bargain hunters
+- International food enthusiasts hunting specific ingredients
 
-- 📱 **Phone Authentication** - Quick registration with phone number
-- 🗺️ **Interactive Map** - Discover deals within selected radius (500m - 10km)
-- 📷 **Photo Upload** - Capture products, barcodes, and price tags
-- 🤖 **AI Extraction** - Automatic product details extraction
-- 🏪 **Store Registry** - Crowd-sourced store verification
-- 🎯 **Personalized Discovery** - Deals matching your interests highlighted
+## Tech Stack
 
-## 🛣️ Roadmap
+- **Backend:** Node.js + Express
+- **Frontend:** Vanilla JS SPA
+- **Security:** Helmet, Rate Limiting, Input Validation
+- **Deployment:** Coolify + Docker
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 1 | Authentication (Phone + GPS) | 🔲 Pending |
-| 2 | Store Registration | 🔲 Pending |
-| 3 | Deal Upload Backend | 🔲 Pending |
-| 4 | Deal Upload Frontend | 🔲 Pending |
-| 5 | Deal Discovery (Map) | 🔲 Pending |
-| 6 | User Interests | 🔲 Pending |
+## Features
 
-## 🚀 Getting Started
+### Phase 1: Authentication (Complete)
+- ✅ Phone number registration (+852 Hong Kong format)
+- ✅ OTP verification (6-digit code)
+- ✅ Optional email for newsletters
+- ✅ GPS permission request
+- ✅ Home/Work location presets
 
-### Prerequisites
-- Flutter SDK 3.0+
-- Dart SDK 3.0+
-- Android Studio / Xcode (for emulators)
-- Firebase project (for auth and database)
+### Phase 2-6: Coming Soon
+- Store registration with verification
+- Deal upload with AI extraction
+- Map-based deal discovery
+- User interest-based highlighting
 
-### Installation
+## Prerequisites
+
+- Node.js 18+
+- npm or yarn
+
+## Installation
 
 ```bash
 # Clone the repository
@@ -44,46 +46,96 @@ git clone https://github.com/Kuechenfenster/SaanFo-GSD.git
 cd SaanFo-GSD
 
 # Install dependencies
-flutter pub get
+npm install
 
-# Run the app
-flutter run
+# Create environment file
+cp .env.example .env
 ```
 
-## 📁 Project Structure
+## Environment Variables
+
+Edit `.env` with your configuration:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| PORT | Server port (default: 8080) | No |
+| NODE_ENV | development or production | No |
+| FIREBASE_PROJECT_ID | Firebase project ID | No (mock mode) |
+| FIREBASE_PRIVATE_KEY | Firebase private key | No (mock mode) |
+| FIREBASE_CLIENT_EMAIL | Firebase client email | No (mock mode) |
+| CORS_ORIGIN | Comma-separated allowed origins | No |
+| RATE_LIMIT_MAX_REQUESTS | Requests per 15min | No |
+
+## Running Locally
+
+```bash
+# Development (with auto-reload)
+npm run dev
+
+# Production
+npm start
+```
+
+Server runs at http://localhost:8080
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/auth/phone` | POST | Request OTP |
+| `/api/auth/verify-otp` | POST | Verify OTP |
+| `/api/user/email` | POST | Save email |
+| `/api/user/location-preset` | POST | Save location |
+| `/api/user/profile` | GET | Get user profile |
+
+## Deployment
+
+### Coolify
+
+1. Create a new resource in Coolify
+2. Connect GitHub repository
+3. Deploy - nixpacks will auto-detect Node.js
+
+### Docker
+
+```bash
+docker build -t saanfo-map .
+docker run -p 8080:8080 saanfo-map
+```
+
+## Development Mode
+
+In development mode, OTPs are displayed in the console for testing:
+```
+[OTP] +85291234567: 123456
+```
+
+## Security Features
+
+- Helmet security headers
+- Rate limiting (100 req/15min)
+- CORS configuration
+- Input validation
+- Request size limits (10kb)
+- Error handling middleware
+
+## Project Structure
 
 ```
-lib/
-├── main.dart              # App entry point
-├── src/
-│   ├── models/           # Data models
-│   ├── services/         # API, Auth, Location services
-│   ├── screens/          # UI screens
-│   └── widgets/          # Reusable components
-├── assets/
-│   ├── images/           # App images
-│   └── fonts/            # Custom fonts
-└── test/                 # Unit & widget tests
+SaanFo-GSD/
+├── public/           # Frontend static files
+│   ├── index.html
+│   ├── css/style.css
+│   └── js/app.js
+├── server.js         # Express server
+├── firebase-config.js # Firebase Admin SDK
+├── package.json
+├── nixpacks.toml
+├── .env.example
+└── .dockerignore
 ```
 
-## 🎯 Target Users
+## License
 
-- 👨‍👩‍👧 **Families** - Especially with helpers managing groceries
-- 🛒 **Bargain Hunters** - Looking for the best deals
-- 🌏 **International Food Enthusiasts** - Finding specific ingredients at good prices
-
-## 📋 Requirements (v1)
-
-See [REQUIREMENTS.md](.a0proj/instructions/REQUIREMENTS.md) for detailed specification.
-
-## 🤝 Contributing
-
-This is a community-driven project. Contributions are welcome!
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-*Made with ❤️ for Hong Kong shoppers*
+MIT
