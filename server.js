@@ -7,7 +7,6 @@
  * - Rate limiting
  * - Input validation
  * - Error handling middleware
- * - Firebase Admin SDK integration
  * - PostgreSQL database (Coolify-compatible)
  */
 
@@ -22,9 +21,6 @@ require('dotenv').config();
 
 // Database configuration
 const { sequelize, User, OTP } = require('./db/models');
-
-// Firebase configuration
-const { admin, isConfigured } = require('./firebase-config');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -144,8 +140,7 @@ app.get('/api/health', async (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    database: dbStatus,
-    firebase: isConfigured ? 'configured' : 'mock-mode'
+    database: dbStatus
   });
 });
 
@@ -192,7 +187,7 @@ app.post('/api/auth/phone', async (req, res, next) => {
     
     console.log(`[OTP] ${formattedPhone}: ${otp}`);
     
-    // In production, you would send SMS here via Firebase or other SMS service
+    // In production, integrate with SMS provider (Twilio, etc.)
     
     res.json({
       success: true,
@@ -228,8 +223,6 @@ app.post('/api/auth/verify-otp', async (req, res, next) => {
     }
     
     // Find the most recent unverified OTP for this verificationId
-    // Note: We use phoneNumber extracted from a previous step or match by recent OTP
-    // For simplicity, we'll find the latest valid OTP
     const otpRecord = await OTP.findOne({
       where: {
         otp: otp,
@@ -282,7 +275,7 @@ app.post('/api/auth/verify-otp', async (req, res, next) => {
     await OTP.update({ verified: true }, { where: { id: verification.id } });
     const user = await User.findOne({ where: { phoneNumber: verification.phoneNumber } });
     
-    // Generate session token (in production, use JWT)
+    // Generate session token
     const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
     
     // Store session in database
@@ -527,7 +520,6 @@ const startServer = async () => {
     console.log('✅ Database connection established');
     
     // Sync models (creates tables if they don't exist)
-    // Use { force: true } to drop and recreate tables (development only)
     await sequelize.sync({ alter: true });
     console.log('✅ Database models synchronized');
     
@@ -535,7 +527,6 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`\n🛒 SaanFo Map Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔥 Firebase: ${isConfigured ? '✅ Configured' : '⚠️  Mock Mode'}`);
       console.log(`🛡️  Rate Limiting: ${process.env.RATE_LIMIT_MAX_REQUESTS || 100} req/15min\n`);
     });
   } catch (error) {
