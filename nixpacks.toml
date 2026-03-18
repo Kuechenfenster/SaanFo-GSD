@@ -2,11 +2,11 @@ providers = ["node"]
 
 [phases.setup]
 nixPkgs = ["nodejs"]
-aptPkgs = ["curl", "wget"]
+aptPkgs = ["curl", "wget", "postgresql", "libpq-dev"]
 
 [phases.install]
 cmds = ["npm install"]
-onlyIncludeFiles = ["package.json"]
+onlyIncludeFiles = ["package.json", "package-lock.json"]
 
 [phases.build]
 cmds = []
