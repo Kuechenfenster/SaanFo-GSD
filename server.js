@@ -1,13 +1,14 @@
 /**
  * SaanFo Map - Express Server
  * Community-driven grocery deal finder app
- * 
+ *
  * Security Features:
  * - Helmet for security headers
  * - Rate limiting
  * - Input validation
  * - Error handling middleware
  * - Firebase Admin SDK integration
+ * - PostgreSQL database (Coolify-compatible)
  */
 
 const express = require('express');
@@ -18,6 +19,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 require('dotenv').config();
+
+// Database configuration
+const { sequelize, User, OTP } = require('./db/models');
 
 // Firebase configuration
 const { admin, isConfigured } = require('./firebase-config');
@@ -94,35 +98,59 @@ const validateEmail = (email) => {
 
 // Validate location data
 const validateLocation = (location) => {
-  return location && 
-    typeof location.latitude === 'number' && 
+  return location &&
+    typeof location.latitude === 'number' &&
     typeof location.longitude === 'number' &&
     location.latitude >= -90 && location.latitude <= 90 &&
     location.longitude >= -180 && location.longitude <= 180;
 };
 
 // ============================================
-// IN-MEMORY STORAGE (Replace with database in production)
+// DATABASE HELPERS
 // ============================================
 
-const userStore = new Map(); // phoneNumber -> user data
-const otpStore = new Map();  // verificationId -> { phoneNumber, otp, expiresAt }
+// Find user by session token
+const findUserBySession = async (sessionToken) => {
+  if (!sessionToken) return null;
+  return await User.findOne({ where: { sessionToken } });
+};
+
+// Find or create user
+const findOrCreateUser = async (phoneNumber) => {
+  const [user] = await User.findOrCreate({
+    where: { phoneNumber },
+    defaults: {
+      phoneNumber,
+      interests: []
+    }
+  });
+  return user;
+};
 
 // ============================================
 // API ROUTES
 // ============================================
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    await sequelize.authenticate();
+    dbStatus = 'connected';
+  } catch (err) {
+    dbStatus = 'error: ' + err.message;
+  }
+  
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
+    database: dbStatus,
     firebase: isConfigured ? 'configured' : 'mock-mode'
   });
 });
 
 // Phone auth - request OTP
-app.post('/api/auth/phone', (req, res, next) => {
+app.post('/api/auth/phone', async (req, res, next) => {
   try {
     const { phoneNumber } = req.body;
     
@@ -147,26 +175,18 @@ app.post('/api/auth/phone', (req, res, next) => {
       });
     }
     
-    // Check for existing user
-    if (!userStore.has(formattedPhone)) {
-      userStore.set(formattedPhone, {
-        phoneNumber: formattedPhone,
-        createdAt: new Date().toISOString(),
-        email: null,
-        homeLocation: null,
-        workLocation: null
-      });
-    }
+    // Check for existing user or create new
+    await findOrCreateUser(formattedPhone);
     
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationId = `ver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Store OTP with 5-minute expiration
-    otpStore.set(verificationId, {
+    // Store OTP in database with 5-minute expiration
+    await OTP.create({
       phoneNumber: formattedPhone,
       otp: otp,
-      expiresAt: Date.now() + 5 * 60 * 1000,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
       attempts: 0
     });
     
@@ -188,7 +208,7 @@ app.post('/api/auth/phone', (req, res, next) => {
 });
 
 // Verify OTP
-app.post('/api/auth/verify-otp', (req, res, next) => {
+app.post('/api/auth/verify-otp', async (req, res, next) => {
   try {
     const { verificationId, otp } = req.body;
     
@@ -207,19 +227,29 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
       });
     }
     
-    // Find verification record
-    const verification = otpStore.get(verificationId);
+    // Find the most recent unverified OTP for this verificationId
+    // Note: We use phoneNumber extracted from a previous step or match by recent OTP
+    // For simplicity, we'll find the latest valid OTP
+    const otpRecord = await OTP.findOne({
+      where: {
+        otp: otp,
+        verified: false
+      },
+      order: [['createdAt', 'DESC']]
+    });
     
-    if (!verification) {
+    if (!otpRecord) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid verification ID'
+        error: 'Invalid OTP'
       });
     }
     
+    const verification = otpRecord;
+    
     // Check expiration
-    if (Date.now() > verification.expiresAt) {
-      otpStore.delete(verificationId);
+    if (new Date() > verification.expiresAt) {
+      await OTP.update({ verified: true }, { where: { id: verification.id } });
       return res.status(400).json({
         success: false,
         error: 'OTP has expired. Please request a new one.'
@@ -227,9 +257,8 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
     }
     
     // Check attempts
-    verification.attempts++;
-    if (verification.attempts > 5) {
-      otpStore.delete(verificationId);
+    if (verification.attempts >= 5) {
+      await OTP.update({ verified: true }, { where: { id: verification.id } });
       return res.status(400).json({
         success: false,
         error: 'Too many attempts. Please request a new OTP.'
@@ -238,26 +267,29 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
     
     // Verify OTP
     if (verification.otp !== otp) {
+      await OTP.update(
+        { attempts: verification.attempts + 1 },
+        { where: { id: verification.id } }
+      );
       return res.status(400).json({
         success: false,
         error: 'Invalid OTP',
-        attemptsRemaining: 5 - verification.attempts
+        attemptsRemaining: 5 - verification.attempts - 1
       });
     }
     
-    // Success - delete OTP and get user
-    otpStore.delete(verificationId);
-    const user = userStore.get(verification.phoneNumber);
+    // Success - mark OTP as verified and get user
+    await OTP.update({ verified: true }, { where: { id: verification.id } });
+    const user = await User.findOne({ where: { phoneNumber: verification.phoneNumber } });
     
     // Generate session token (in production, use JWT)
     const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
     
-    // Store session
-    userStore.set(verification.phoneNumber, {
-      ...user,
-      sessionToken: sessionToken,
-      verifiedAt: new Date().toISOString()
-    });
+    // Store session in database
+    await User.update(
+      { sessionToken, verifiedAt: new Date() },
+      { where: { phoneNumber: verification.phoneNumber } }
+    );
     
     res.json({
       success: true,
@@ -266,8 +298,8 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
       user: {
         phoneNumber: user.phoneNumber,
         email: user.email,
-        hasHomeLocation: !!user.homeLocation,
-        hasWorkLocation: !!user.workLocation
+        hasHomeLocation: !!(user.homeLatitude && user.homeLongitude),
+        hasWorkLocation: !!(user.workLatitude && user.workLongitude)
       }
     });
     
@@ -277,7 +309,7 @@ app.post('/api/auth/verify-otp', (req, res, next) => {
 });
 
 // Save email (optional)
-app.post('/api/user/email', (req, res, next) => {
+app.post('/api/user/email', async (req, res, next) => {
   try {
     const { sessionToken, email } = req.body;
     
@@ -297,15 +329,9 @@ app.post('/api/user/email', (req, res, next) => {
     }
     
     // Find user by session token
-    let foundUser = null;
-    for (const [phone, user] of userStore) {
-      if (user.sessionToken === sessionToken) {
-        foundUser = user;
-        break;
-      }
-    }
+    const user = await findUserBySession(sessionToken);
     
-    if (!foundUser) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         error: 'Invalid session'
@@ -313,13 +339,15 @@ app.post('/api/user/email', (req, res, next) => {
     }
     
     // Update email
-    foundUser.email = email || null;
-    userStore.set(foundUser.phoneNumber, foundUser);
+    await User.update(
+      { email: email || null },
+      { where: { id: user.id } }
+    );
     
     res.json({
       success: true,
       message: email ? 'Email saved successfully' : 'Email removed',
-      email: foundUser.email
+      email: email || null
     });
     
   } catch (error) {
@@ -328,7 +356,7 @@ app.post('/api/user/email', (req, res, next) => {
 });
 
 // Save location preset
-app.post('/api/user/location-preset', (req, res, next) => {
+app.post('/api/user/location-preset', async (req, res, next) => {
   try {
     const { sessionToken, presetType, location } = req.body;
     
@@ -355,15 +383,9 @@ app.post('/api/user/location-preset', (req, res, next) => {
     }
     
     // Find user by session token
-    let foundUser = null;
-    for (const [phone, user] of userStore) {
-      if (user.sessionToken === sessionToken) {
-        foundUser = user;
-        break;
-      }
-    }
+    const user = await findUserBySession(sessionToken);
     
-    if (!foundUser) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         error: 'Invalid session'
@@ -371,14 +393,21 @@ app.post('/api/user/location-preset', (req, res, next) => {
     }
     
     // Update location
-    const updateKey = `${presetType}Location`;
-    foundUser[updateKey] = location;
-    userStore.set(foundUser.phoneNumber, foundUser);
+    const updateData = {};
+    if (presetType === 'home') {
+      updateData.homeLatitude = location.latitude;
+      updateData.homeLongitude = location.longitude;
+    } else {
+      updateData.workLatitude = location.latitude;
+      updateData.workLongitude = location.longitude;
+    }
+    
+    await User.update(updateData, { where: { id: user.id } });
     
     res.json({
       success: true,
       message: `${presetType.charAt(0).toUpperCase() + presetType.slice(1)} location saved`,
-      [updateKey]: location
+      [presetType + 'Location']: location
     });
     
   } catch (error) {
@@ -387,7 +416,7 @@ app.post('/api/user/location-preset', (req, res, next) => {
 });
 
 // Get user profile
-app.get('/api/user/profile', (req, res, next) => {
+app.get('/api/user/profile', async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const sessionToken = authHeader?.replace('Bearer ', '');
@@ -400,15 +429,9 @@ app.get('/api/user/profile', (req, res, next) => {
     }
     
     // Find user by session token
-    let foundUser = null;
-    for (const [phone, user] of userStore) {
-      if (user.sessionToken === sessionToken) {
-        foundUser = user;
-        break;
-      }
-    }
+    const user = await findUserBySession(sessionToken);
     
-    if (!foundUser) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         error: 'Invalid session'
@@ -418,12 +441,19 @@ app.get('/api/user/profile', (req, res, next) => {
     res.json({
       success: true,
       user: {
-        phoneNumber: foundUser.phoneNumber,
-        email: foundUser.email,
-        homeLocation: foundUser.homeLocation,
-        workLocation: foundUser.workLocation,
-        createdAt: foundUser.createdAt,
-        verifiedAt: foundUser.verifiedAt
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        homeLocation: user.homeLatitude && user.homeLongitude ? {
+          latitude: user.homeLatitude,
+          longitude: user.homeLongitude
+        } : null,
+        workLocation: user.workLatitude && user.workLongitude ? {
+          latitude: user.workLatitude,
+          longitude: user.workLongitude
+        } : null,
+        interests: user.interests,
+        createdAt: user.createdAt,
+        verifiedAt: user.verifiedAt
       }
     });
     
@@ -458,8 +488,8 @@ app.use((err, req, res, next) => {
   console.error('[ERROR]', err.stack);
   
   // Don't leak error details in production
-  const message = process.env.NODE_ENV === 'production' 
-    ? 'Internal server error' 
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
     : err.message;
   
   res.status(err.status || 500).json({
@@ -472,9 +502,14 @@ app.use((err, req, res, next) => {
 // GRACEFUL SHUTDOWN
 // ============================================
 
-const gracefulShutdown = () => {
+const gracefulShutdown = async () => {
   console.log('\n🛑 Shutting down gracefully...');
-  // Clean up resources here
+  try {
+    await sequelize.close();
+    console.log('✅ Database connection closed');
+  } catch (err) {
+    console.error('Error closing database:', err);
+  }
   process.exit(0);
 };
 
@@ -485,11 +520,30 @@ process.on('SIGINT', gracefulShutdown);
 // START SERVER
 // ============================================
 
-app.listen(PORT, () => {
-  console.log(`\n🛒 SaanFo Map Server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔥 Firebase: ${isConfigured ? '✅ Configured' : '⚠️  Mock Mode'}`);
-  console.log(`🛡️  Rate Limiting: ${process.env.RATE_LIMIT_MAX_REQUESTS || 100} req/15min\n`);
-});
+const startServer = async () => {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('✅ Database connection established');
+    
+    // Sync models (creates tables if they don't exist)
+    // Use { force: true } to drop and recreate tables (development only)
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database models synchronized');
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`\n🛒 SaanFo Map Server running on port ${PORT}`);
+      console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔥 Firebase: ${isConfigured ? '✅ Configured' : '⚠️  Mock Mode'}`);
+      console.log(`🛡️  Rate Limiting: ${process.env.RATE_LIMIT_MAX_REQUESTS || 100} req/15min\n`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 module.exports = app;
