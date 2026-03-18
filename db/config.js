@@ -9,6 +9,14 @@ const { Sequelize } = require('sequelize');
 // Check if database URL is provided (Coolify style)
 const databaseUrl = process.env.DATABASE_URL;
 
+// If no DATABASE_URL is provided, fail early with clear message
+if (!databaseUrl) {
+  console.error('❌ DATABASE_URL environment variable is not set!');
+  console.error('Please add DATABASE_URL in Coolify environment variables.');
+  console.error('Example: postgres://postgres:password@host:5432/dbname');
+  process.exit(1);
+}
+
 let sequelize;
 
 if (databaseUrl) {
@@ -23,25 +31,6 @@ if (databaseUrl) {
       idle: 10000
     }
   });
-} else {
-  // Use individual connection parameters
-  sequelize = new Sequelize(
-    process.env.DB_NAME || 'saanfo_map',
-    process.env.DB_USER || 'postgres',
-    process.env.DB_PASSWORD || '',
-    {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      dialect: 'postgres',
-      logging: process.env.NODE_ENV === 'development' ? console.log : false,
-      pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
-      }
-    }
-  );
 }
 
 module.exports = sequelize;
